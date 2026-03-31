@@ -45,8 +45,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // 관리자 대시보드은 관리자만 접근 가능
-  if (request.nextUrl.pathname.startsWith('/admin') && !isAdmin) {
+  // 관리자 대시보드은 관리자만 접근 가능 (admin-login 제외)
+  if (request.nextUrl.pathname.startsWith('/admin') && request.nextUrl.pathname !== '/admin-login' && !isAdmin) {
     const url = request.nextUrl.clone()
     url.pathname = '/admin-login'
     return NextResponse.redirect(url)
