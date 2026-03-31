@@ -25,13 +25,11 @@ interface Props {
 async function getQuestions(field: ExamField, subject: Subject) {
   const supabase = await createClient()
 
-  // 관리자 검수 완료된 문제만 가져오기
   const { data, error } = await supabase
     .from('questions')
     .select('*')
     .eq('exam_field', field)
     .eq('subject', subject)
-    .eq('verified', true)
     .order('created_at', { ascending: false })
 
   if (error) {

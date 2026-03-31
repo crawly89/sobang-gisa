@@ -28,7 +28,6 @@ async function getQuestionCounts() {
   const { data } = await supabase
     .from('questions')
     .select('exam_field, subject')
-    .eq('verified', true)
 
   if (!data) return {}
 

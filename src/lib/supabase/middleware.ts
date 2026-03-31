@@ -5,6 +5,8 @@ const supabaseKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234'
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -29,13 +31,24 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  // 관리자 인증 체크 (쿠키 기반 간단 인증)
+  const isAdmin = request.cookies.get('admin_auth')?.value === ADMIN_PASSWORD
+
   const protectedPaths = ['/dashboard', '/wrong-notes']
   const isProtected = protectedPaths.some(p => request.nextUrl.pathname.startsWith(p))
 
-  if (isProtected && !user) {
+  // 관리자는 모든 페이지 접근 가능
+  if (isProtected && !user && !isAdmin) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('redirectTo', request.nextUrl.pathname)
+    return NextResponse.redirect(url)
+  }
+
+  // 관리자 대시보드은 관리자만 접근 가능
+  if (request.nextUrl.pathname.startsWith('/admin') && !isAdmin) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/admin-login'
     return NextResponse.redirect(url)
   }
 

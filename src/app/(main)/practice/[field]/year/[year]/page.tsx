@@ -18,7 +18,6 @@ async function getQuestions(field: ExamField, year: number) {
     .select('*')
     .eq('exam_field', field)
     .eq('year', year)
-    .eq('verified', true)
     .order('round', { ascending: true })
     .order('question_number', { ascending: true })
 

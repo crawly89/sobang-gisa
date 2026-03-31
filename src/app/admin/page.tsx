@@ -1,21 +1,27 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import AdminDashboardClient from './AdminDashboardClient'
 
 async function getUnverifiedQuestions() {
-  const supabase = await createClient()
+  try {
+    const supabase = await createAdminClient()
 
-  const { data, error } = await supabase
-    .from('questions')
-    .select('*')
-    .eq('verified', false)
-    .order('created_at', { ascending: false })
+    const { data, error } = await supabase
+      .from('questions')
+      .select('*')
+      .eq('verified', false)
+      .order('created_at', { ascending: false })
 
-  if (error) {
-    console.error('Error fetching unverified questions:', error)
+    if (error) {
+      console.error('Error fetching unverified questions:', error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error('Admin auth error:', error)
     return []
   }
-
-  return data || []
 }
 
 export const metadata = {
