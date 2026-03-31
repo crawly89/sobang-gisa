@@ -25,12 +25,12 @@ async function handleLogin(formData: FormData) {
   redirect('/admin-login?error=1')
 }
 
-export default function AdminLoginPage({
+export default async function AdminLoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>
 }) {
-  const params = searchParams.then(p => p)
+  const params = await searchParams
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -57,13 +57,11 @@ export default function AdminLoginPage({
             </div>
 
             {/* Error Message */}
-            <params>
-              {(p) => p.error && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
-                  비밀번호가 일치하지 않습니다.
-                </div>
-              )}
-            </params>
+            {params.error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+                비밀번호가 일치하지 않습니다.
+              </div>
+            )}
 
             <button
               type="submit"
