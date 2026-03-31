@@ -30,8 +30,16 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files
+.env.local
+.env.production
+
+# 수집 데이터 (용량 크고 재생성 가능)
+/data/raw/
+
+# Playwright 캐시
+/playwright-report/
+/test-results/
 
 # vercel
 .vercel
