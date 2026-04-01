@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import type { Subject } from '@/types'
 
 export const metadata: Metadata = { title: '오답노트' }
@@ -20,25 +19,10 @@ const SUBJECT_LABELS: Record<Subject, string> = {
 
 const OPTIONS = ['①', '②', '③', '④']
 
-async function getUserId() {
-  // 1. 로그인한 사용자 확인
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (user) return user.id
-
-  // 2. 익명 사용자 ID 확인
-  const cookieStore = await cookies()
-  const anonymousId = cookieStore.get('anonymous_user_id')?.value
-
-  if (anonymousId) return anonymousId
-
-  // 3. 사용자 ID 없음
-  return null
-}
-
 export default async function WrongNotesPage() {
-  const userId = await getUserId()
+  // 사용자 ID 가져오기
+  const cookieStore = await cookies()
+  const userId = cookieStore.get('anonymous_user_id')?.value
 
   if (!userId) {
     return (
@@ -48,22 +32,14 @@ export default async function WrongNotesPage() {
         <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
           <div className="text-4xl mb-4">📝</div>
           <p className="text-gray-500 mb-6">
-            로그인하면 틀린 문제를 모아볼 수 있어요.
+            문제를 먼저 풀어야 오답노트가 생성됩니다.
           </p>
-          <div className="flex gap-3 justify-center">
-            <Link
-              href="/login?redirectTo=/wrong-notes"
-              className="bg-red-600 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-red-700"
-            >
-              로그인
-            </Link>
-            <Link
-              href="/practice"
-              className="border border-gray-200 text-gray-700 px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-50"
-            >
-              문제 풀기
-            </Link>
-          </div>
+          <Link
+            href="/practice"
+            className="bg-red-600 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-red-700"
+          >
+            문제 풀러 가기
+          </Link>
         </div>
       </div>
     )
@@ -71,8 +47,8 @@ export default async function WrongNotesPage() {
 
   const supabase = await createClient()
 
-  // 틀린 문제 목록 (최근 기준, 문제 정보 포함)
-  const { data: wrongAnswers } = await supabase
+  // 틀린 문제 목록 조회
+  const { data: wrongAnswers, error } = await supabase
     .from('user_answers')
     .select(`
       id,
@@ -89,23 +65,33 @@ export default async function WrongNotesPage() {
     .order('answered_at', { ascending: false })
     .limit(50)
 
+  // 디버깅: 에러가 있으면 콘솔에 출력
+  if (error) {
+    console.error('오답노트 조회 에러:', error)
+  }
+
+  console.log('조회된 오답 개수:', wrongAnswers?.length || 0)
+
   const questions = wrongAnswers
-    ?.map(a => ({
-      answerId: a.id,
-      selectedAnswer: a.selected_answer as 1 | 2 | 3 | 4,
-      answeredAt: a.answered_at,
-      ...(a.questions as unknown as {
-        id: string
-        subject: Subject
-        question_text: string
-        option_a: string
-        option_b: string
-        option_c: string
-        option_d: string
-        answer: 1 | 2 | 3 | 4
-        explanation: string | null
-      }),
-    }))
+    ?.map(a => {
+      const q = a.questions as any
+      if (!q) return null
+
+      return {
+        answerId: a.id,
+        selectedAnswer: a.selected_answer as 1 | 2 | 3 | 4,
+        answeredAt: a.answered_at,
+        id: q.id,
+        subject: q.subject as Subject,
+        question_text: q.question_text,
+        option_a: q.option_a,
+        option_b: q.option_b,
+        option_c: q.option_c,
+        option_d: q.option_d,
+        answer: q.answer as 1 | 2 | 3 | 4,
+        explanation: q.explanation,
+      }
+    })
     .filter(Boolean) || []
 
   return (
@@ -113,7 +99,14 @@ export default async function WrongNotesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">오답노트</h1>
-          <p className="text-gray-500 text-sm mt-1">틀린 문제를 다시 확인하고 완벽하게 익혀요.</p>
+          <p className="text-gray-500 text-sm mt-1">
+            틀린 문제를 다시 확인하고 완벽하게 익혀요.
+          </p>
+          {userId && (
+            <p className="text-xs text-gray-400 mt-1">
+              사용자 ID: {userId.slice(0, 20)}...
+            </p>
+          )}
         </div>
         <span className="bg-red-100 text-red-600 font-bold text-sm px-3 py-1 rounded-full">
           {questions.length}문제
@@ -124,14 +117,20 @@ export default async function WrongNotesPage() {
         <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
           <div className="text-4xl mb-3">🎉</div>
           <p className="text-gray-700 font-medium">틀린 문제가 없어요!</p>
-          <p className="text-gray-400 text-sm mt-1 mb-6">문제를 더 풀면 오답이 여기 쌓여요.</p>
-          <Link href="/practice" className="bg-red-600 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-red-700">
+          <p className="text-gray-400 text-sm mt-1 mb-6">
+            문제를 더 풀면 오답이 여기 쌓여요.
+          </p>
+          <Link
+            href="/practice"
+            className="bg-red-600 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-red-700"
+          >
             문제 풀러 가기
           </Link>
         </div>
       ) : (
         <div className="space-y-4">
           {questions.map((q, idx) => {
+            if (!q) return null
             const opts = [q.option_a, q.option_b, q.option_c, q.option_d]
             return (
               <div key={q.answerId} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
@@ -188,6 +187,16 @@ export default async function WrongNotesPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* 디버깅 정보 */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-8 p-4 bg-gray-100 rounded-lg text-xs">
+          <p className="font-bold mb-2">디버깅 정보:</p>
+          <p>사용자 ID: {userId}</p>
+          <p>조회된 오답 수: {questions.length}</p>
+          {error && <p className="text-red-600">에러: {error.message}</p>}
         </div>
       )}
     </div>
