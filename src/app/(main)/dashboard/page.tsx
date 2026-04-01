@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import type { Subject } from '@/types'
 
 export const metadata: Metadata = { title: '학습 통계' }
@@ -17,17 +18,62 @@ const SUBJECT_LABELS: Record<Subject, string> = {
   hazmat:              '위험물의 성상 및 시설기준',
 }
 
-export default async function DashboardPage() {
+async function getUserId() {
+  // 1. 로그인한 사용자 확인
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) redirect('/login?redirectTo=/dashboard')
+  if (user) return user.id
+
+  // 2. 익명 사용자 ID 확인
+  const cookieStore = await cookies()
+  const anonymousId = cookieStore.get('anonymous_user_id')?.value
+
+  if (anonymousId) return anonymousId
+
+  // 3. 사용자 ID 없음 - 로그인 유도
+  return null
+}
+
+export default async function DashboardPage() {
+  const userId = await getUserId()
+
+  if (!userId) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">학습 통계</h1>
+
+        <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
+          <div className="text-4xl mb-4">📊</div>
+          <p className="text-gray-500 mb-6">
+            로그인하면 학습 통계를 확인할 수 있어요.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Link
+              href="/login?redirectTo=/dashboard"
+              className="bg-red-600 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-red-700"
+            >
+              로그인
+            </Link>
+            <Link
+              href="/practice"
+              className="border border-gray-200 text-gray-700 px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-50"
+            >
+              비회원으로 계속하기
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const supabase = await createClient()
 
   // 전체 풀이 기록 통계
   const { data: answerStats } = await supabase
     .from('user_answers')
     .select('is_correct, questions(subject)')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
 
   const totalAnswered = answerStats?.length || 0
   const totalCorrect = answerStats?.filter(a => a.is_correct).length || 0
@@ -58,7 +104,7 @@ export default async function DashboardPage() {
   const { data: recentExams } = await supabase
     .from('mock_exams')
     .select('id, exam_field, score, completed_at')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .not('completed_at', 'is', null)
     .order('completed_at', { ascending: false })
     .limit(5)

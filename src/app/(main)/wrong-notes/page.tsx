@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import type { Subject } from '@/types'
 
 export const metadata: Metadata = { title: '오답노트' }
@@ -19,11 +20,56 @@ const SUBJECT_LABELS: Record<Subject, string> = {
 
 const OPTIONS = ['①', '②', '③', '④']
 
-export default async function WrongNotesPage() {
+async function getUserId() {
+  // 1. 로그인한 사용자 확인
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) redirect('/login?redirectTo=/wrong-notes')
+  if (user) return user.id
+
+  // 2. 익명 사용자 ID 확인
+  const cookieStore = await cookies()
+  const anonymousId = cookieStore.get('anonymous_user_id')?.value
+
+  if (anonymousId) return anonymousId
+
+  // 3. 사용자 ID 없음
+  return null
+}
+
+export default async function WrongNotesPage() {
+  const userId = await getUserId()
+
+  if (!userId) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">오답노트</h1>
+
+        <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
+          <div className="text-4xl mb-4">📝</div>
+          <p className="text-gray-500 mb-6">
+            로그인하면 틀린 문제를 모아볼 수 있어요.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Link
+              href="/login?redirectTo=/wrong-notes"
+              className="bg-red-600 text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-red-700"
+            >
+              로그인
+            </Link>
+            <Link
+              href="/practice"
+              className="border border-gray-200 text-gray-700 px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-50"
+            >
+              문제 풀기
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const supabase = await createClient()
 
   // 틀린 문제 목록 (최근 기준, 문제 정보 포함)
   const { data: wrongAnswers } = await supabase
@@ -38,7 +84,7 @@ export default async function WrongNotesPage() {
         answer, explanation
       )
     `)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('is_correct', false)
     .order('answered_at', { ascending: false })
     .limit(50)
