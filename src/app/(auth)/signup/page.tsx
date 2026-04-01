@@ -26,13 +26,6 @@ export default function SignupPage() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-        // 이메일 확인 없이 바로 가입 (개발용)
-        data: {
-          skip_email_verification: 'true'
-        }
-      },
     })
 
     if (error) {
