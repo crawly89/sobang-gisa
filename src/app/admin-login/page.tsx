@@ -28,9 +28,24 @@ async function handleLogin(formData: FormData) {
 export default async function AdminLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; pw?: string }>
 }) {
   const params = await searchParams
+
+  // 쿼리 파라미터로 바로 로그인 (개발용 편의 기능)
+  if (params.pw) {
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234'
+    if (params.pw === ADMIN_PASSWORD) {
+      const cookieStore = await cookies()
+      cookieStore.set('admin_auth', ADMIN_PASSWORD, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7일
+      })
+      redirect('/admin')
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -70,6 +85,17 @@ export default async function AdminLoginPage({
               로그인
             </button>
           </form>
+
+          {/* 빠른 로그in 링크 (개발용) */}
+          <div className="mt-6 p-4 bg-blue-50 rounded-xl">
+            <div className="text-sm font-medium text-blue-800 mb-2">💡 빠른 로그인</div>
+            <a
+              href="/admin-login?pw=admin1234"
+              className="text-sm text-blue-600 hover:text-blue-800 underline"
+            >
+              비밀번호 없이 바로 로그인
+            </a>
+          </div>
 
           <div className="mt-6 text-center">
             <a href="/" className="text-sm text-gray-500 hover:text-gray-700">
