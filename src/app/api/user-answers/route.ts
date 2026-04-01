@@ -13,37 +13,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 익명 사용자 ID 가져오기 또는 생성
-    const cookieStore = await cookies()
-    let userId = cookieStore.get('anonymous_user_id')?.value
-
-    if (!userId) {
-      // 간단한 랜덤 ID 생성
-      userId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-      // 즉시 쿠키에 저장 (다음 요청부터 사용)
-      const response = NextResponse.json({
-        success: true,
-        userId: userId,
-        message: '새 사용자 ID 생성됨'
-      })
-
-      response.cookies.set('anonymous_user_id', userId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7, // 7일
-      })
-
-      // 쿠키 설정 후에도 계속 진행해야 하므로 response는 저장하지 않고 변수만 사용
-      // userId는 이제 사용 가능
-    }
-
-    // Supabase 클라이언트 생성
+    // 1. 로그인한 사용자 확인
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    let userId = user?.id
+    let isNewUser = false
+
+    // 2. 익명 사용자 ID 가져오기 또는 생성
+    if (!userId) {
+      const cookieStore = await cookies()
+      userId = cookieStore.get('anonymous_user_id')?.value
+
+      if (!userId) {
+        // 간단한 랜덤 ID 생성
+        userId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        isNewUser = true
+      }
+    }
 
     // 문제 정보 가져오기 (정답 확인용)
     const { data: question, error: questionError } = await supabase
@@ -83,9 +74,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 첫 생성된 사용자 ID인 경우에만 쿠키 설정
-    const isNewUser = !cookieStore.get('anonymous_user_id')?.value
-
     const response = NextResponse.json({
       success: true,
       isCorrect,
@@ -119,17 +107,25 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const questionId = searchParams.get('questionId')
 
-    const cookieStore = await cookies()
-    const userId = cookieStore.get('anonymous_user_id')?.value
-
-    if (!userId) {
-      return NextResponse.json({ answers: [] })
-    }
-
+    // 1. 로그인한 사용자 확인
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
     )
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    let userId = user?.id
+
+    // 2. 익명 사용자 ID 확인
+    if (!userId) {
+      const cookieStore = await cookies()
+      userId = cookieStore.get('anonymous_user_id')?.value
+    }
+
+    if (!userId) {
+      return NextResponse.json({ answers: [] })
+    }
 
     let query = supabase
       .from('user_answers')
