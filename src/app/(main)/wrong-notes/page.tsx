@@ -19,10 +19,25 @@ const SUBJECT_LABELS: Record<Subject, string> = {
 
 const OPTIONS = ['①', '②', '③', '④']
 
-export default async function WrongNotesPage() {
-  // 사용자 ID 가져오기
+async function getUserId() {
+  // 1. 로그인한 사용자 확인
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (user) return user.id
+
+  // 2. 익명 사용자 ID 확인
   const cookieStore = await cookies()
-  const userId = cookieStore.get('anonymous_user_id')?.value
+  const anonymousId = cookieStore.get('anonymous_user_id')?.value
+
+  if (anonymousId) return anonymousId
+
+  // 3. 사용자 ID 없음
+  return null
+}
+
+export default async function WrongNotesPage() {
+  const userId = await getUserId()
 
   if (!userId) {
     return (
@@ -104,7 +119,7 @@ export default async function WrongNotesPage() {
           </p>
           {userId && (
             <p className="text-xs text-gray-400 mt-1">
-              사용자 ID: {userId.slice(0, 20)}...
+              {userId.startsWith('anon_') ? '익명 사용자' : '로그인 사용자'}
             </p>
           )}
         </div>
