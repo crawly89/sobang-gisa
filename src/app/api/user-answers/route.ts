@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 export async function POST(request: NextRequest) {
@@ -13,12 +14,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 1. 로그인한 사용자 확인
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
+    // 1. 로그인한 사용자 확인 (cookie 기반)
+    const supabase = await createSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     let userId = user?.id
@@ -36,8 +33,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Service Role 클라이언트로 DB 작업 (RLS 우회 필요)
+    const serviceSupabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
     // 문제 정보 가져오기 (정답 확인용)
-    const { data: question, error: questionError } = await supabase
+    const { data: question, error: questionError } = await serviceSupabase
       .from('questions')
       .select('answer')
       .eq('id', questionId)
@@ -53,7 +56,7 @@ export async function POST(request: NextRequest) {
     const isCorrect = selectedAnswer === question.answer
 
     // 답안 저장
-    const { data, error } = await supabase
+    const { data, error } = await serviceSupabase
       .from('user_answers')
       .insert({
         user_id: userId,
@@ -107,12 +110,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const questionId = searchParams.get('questionId')
 
-    // 1. 로그인한 사용자 확인
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
-    )
-
+    // 1. 로그인한 사용자 확인 (cookie 기반)
+    const supabase = await createSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     let userId = user?.id
