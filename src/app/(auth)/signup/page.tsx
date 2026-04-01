@@ -23,17 +23,43 @@ export default function SignupPage() {
     setError('')
 
     const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // 이메일 확인 없이 바로 가입 (개발용)
+        data: {
+          skip_email_verification: 'true'
+        }
+      },
     })
 
     if (error) {
       setError(error.message === 'User already registered'
         ? '이미 가입된 이메일입니다.'
-        : '회원가입 중 오류가 발생했습니다.')
+        : error.message || '회원가입 중 오류가 발생했습니다.')
       setLoading(false)
+      return
+    }
+
+    // 이메일 확인 없이 바로 세션 생성
+    if (data.user && !data.session) {
+      // 세션이 없지만 사용자는 생성된 경우 - 로그인 시도
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (signInError) {
+        // 로그인 실패해도 가입은 성공으로 처리
+        setDone(true)
+        return
+      }
+
+      // 로그인 성공하면 대시보드로
+      router.push('/dashboard')
+      router.refresh()
       return
     }
 

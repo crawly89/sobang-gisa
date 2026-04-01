@@ -1,7 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import type { User } from '@supabase/supabase-js'
 
 const NAV_ITEMS = [
   { href: '/practice',   label: '문제풀기' },
@@ -12,6 +15,35 @@ const NAV_ITEMS = [
 
 export default function Header() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // 사용자 상태 확인
+    const supabase = createClient()
+
+    // 현재 사용자 가져오기
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user)
+      setLoading(false)
+    })
+
+    // 인증 상태 변경 리스너
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/')
+    router.refresh()
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
@@ -42,18 +74,36 @@ export default function Header() {
 
         {/* 우측 버튼 */}
         <div className="flex items-center gap-2">
-          <Link
-            href="/login"
-            className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5"
-          >
-            로그인
-          </Link>
-          <Link
-            href="/signup"
-            className="text-sm bg-red-600 text-white px-4 py-1.5 rounded-full hover:bg-red-700 transition-colors"
-          >
-            무료 시작
-          </Link>
+          {loading ? (
+            <div className="text-sm text-gray-400">불러오는 중...</div>
+          ) : user ? (
+            <>
+              <span className="hidden sm:inline text-sm text-gray-600">
+                {user.email}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5"
+              >
+                로그아웃
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5"
+              >
+                로그인
+              </Link>
+              <Link
+                href="/signup"
+                className="text-sm bg-red-600 text-white px-4 py-1.5 rounded-full hover:bg-red-700 transition-colors"
+              >
+                무료 시작
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
