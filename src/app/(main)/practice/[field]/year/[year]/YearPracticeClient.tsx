@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { Question, ExamField } from '@/types'
 
 interface Props {
@@ -21,6 +21,9 @@ export default function YearPracticeClient({
   const [selectedAnswer, setSelectedAnswer] = useState<1 | 2 | 3 | 4 | null>(null)
   const [showExplanation, setShowExplanation] = useState(false)
   const [answers, setAnswers] = useState<Record<string, 1 | 2 | 3 | 4>>({})
+  const [saving, setSaving] = useState(false)
+
+  const questionStartTime = useRef<number>(Date.now())
 
   // 필터링된 문제 목록
   const filteredQuestions = selectedRound === 'all'
@@ -33,12 +36,42 @@ export default function YearPracticeClient({
     ? ((currentIndex + 1) / filteredQuestions.length) * 100
     : 0
 
-  const handleSelect = (answer: 1 | 2 | 3 | 4) => {
+  // 문제가 바뀔 때 시작 시간 재설정
+  useEffect(() => {
+    questionStartTime.current = Date.now()
+  }, [currentIndex])
+
+  const handleSelect = async (answer: 1 | 2 | 3 | 4) => {
     if (showExplanation || !currentQuestion) return
+
+    const timeSpent = Math.round((Date.now() - questionStartTime.current) / 1000)
 
     setSelectedAnswer(answer)
     setShowExplanation(true)
     setAnswers(prev => ({ ...prev, [currentQuestion.id]: answer }))
+
+    // 답안 저장 (API)
+    setSaving(true)
+    try {
+      const res = await fetch('/api/user-answers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: currentQuestion.id,
+          selectedAnswer: answer,
+          timeSpent,
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        console.log('답안 저장 완료:', data)
+      }
+    } catch (error) {
+      console.error('답안 저장 실패:', error)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleNext = () => {
@@ -210,6 +243,7 @@ export default function YearPracticeClient({
           }`}>
             <div className="font-medium mb-2">
               {isCorrect ? '✅ 정답!' : '❌ 오답'}
+              {saving && <span className="ml-2 text-sm text-gray-500">(저장 중...)</span>}
             </div>
             <div className="text-sm text-gray-700 whitespace-pre-line">
               {currentQuestion.explanation || '해설이 준비 중입니다.'}
