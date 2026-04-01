@@ -20,6 +20,23 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       // 간단한 랜덤 ID 생성
       userId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // 즉시 쿠키에 저장 (다음 요청부터 사용)
+      const response = NextResponse.json({
+        success: true,
+        userId: userId,
+        message: '새 사용자 ID 생성됨'
+      })
+
+      response.cookies.set('anonymous_user_id', userId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7일
+      })
+
+      // 쿠키 설정 후에도 계속 진행해야 하므로 response는 저장하지 않고 변수만 사용
+      // userId는 이제 사용 가능
     }
 
     // Supabase 클라이언트 생성
@@ -61,19 +78,23 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Error saving answer:', error)
       return NextResponse.json(
-        { error: 'Failed to save answer' },
+        { error: 'Failed to save answer', details: error.message },
         { status: 500 }
       )
     }
 
-    // 사용자 ID를 쿠키에 저장 (7일간)
+    // 첫 생성된 사용자 ID인 경우에만 쿠키 설정
+    const isNewUser = !cookieStore.get('anonymous_user_id')?.value
+
     const response = NextResponse.json({
       success: true,
       isCorrect,
-      answer: data
+      answer: data,
+      userId,
+      isNewUser
     })
 
-    if (!cookieStore.get('anonymous_user_id')?.value) {
+    if (isNewUser) {
       response.cookies.set('anonymous_user_id', userId, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -86,7 +107,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error in user-answers API:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: String(error) },
       { status: 500 }
     )
   }
